@@ -32,6 +32,8 @@ cp -f /vagrant/rpms/bin/* /usr/bin
 easy_install -i http://mirrors.aliyun.com/pypi/simple/ pip
 /usr/sbin/ntpdate 3.cn.pool.ntp.org
 #curl -sSL https://get.daocloud.io/daotools/set_mirror.sh | sh -s http://a0dd9923.m.daocloud.io
+
+mkdir -p /etc/docker/
 echo '{"registry-mirrors": ["https://97ueh6cd.mirror.aliyuncs.com"]}' > /etc/docker/daemon.json
 
 sed -i 's/ExecStart=.*/ExecStart=\/usr\/bin\/dockerd --insecure-registry docker.artifactory:8000/' /usr/lib/systemd/system/docker.service 

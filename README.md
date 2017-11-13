@@ -56,7 +56,7 @@
 - 安装vagrant
 - 导入vbox：在本目录下，打开cmd,运行: 
 ```
-vagrant box add --name bento/centos-7.3 bento.centos-7.3
+vagrant box add --name cmdt/centos-7.3 bento.centos-7.3
 ```
 
 - 开始构建devops虚拟环境: 运行

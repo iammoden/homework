@@ -1,0 +1,17 @@
+.vagrant/
+*.txt
+hosts
+
+PortableGit/
+hosts
+favicon.ico
+PortableGit-2.14.exe
+
+.git.exe
+files/images/
+cmdt-devops.exe
+boot-setup.bat
+firstDownloadFiles.exe
+git-update.bat
+phase1-setup.bat
+

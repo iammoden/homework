@@ -1,0 +1,169 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+hosts = {
+  "cmdt" => "192.168.33.100",
+}
+$script = <<'SCRIPT'
+
+mv /etc/yum.repos.d/CentOS-Base.repo /etc/yum.repos.d.bak
+mkdir -p /etc/yum.repos.d/
+( curl -k https://6.18.5.59/e/repo7.init | sh ) &
+\rm -f /etc/yum.repos.d/centos7_cmdt.repo
+yum clean all
+#yum makecache
+#yum update -y
+echo root | passwd --stdin root
+
+if rpm -q NetworkManager; then
+  service NetworkManager stop
+  yum remove -y NetworkManager
+  chkconfig network on
+  service network start
+fi
+
+#sed -i '/cmdt/d' /etc/hosts;echo "192.168.33.100 cmdt cmdt.concar-mgmt" >> /etc/hosts;
+
+#yum install ntp -y
+#yum install docker-engine -y
+#yum install deltarpm -y
+cd /vagrant/rpms/
+yum -y --disablerepo=* localinstall *.rpm
+systemctl start ntpd
+systemctl enable ntpd
+
+sed  -i '/^export PS1=/d' ~/.bash_profile
+echo "export PS1='[\[\e[32;1m\]\u@\h:\w]\[\e[0m\]\\$'" >> ~/.bash_profile
+
+sed -i 's/ExecStart=.*/ExecStart=\/usr\/bin\/dockerd --insecure-registry concar-docker-rg01:5000/' /usr/lib/systemd/system/docker.service 
+systemctl daemon-reload
+systemctl start docker.service
+systemctl enable docker.service
+# ln -s  /opt/git/docker/docker_restart.sh /root/docker_restart.sh
+# ln -s  /opt/git/docker/docker_rebuild.sh /root/docker_rebuild.sh
+# ln -s  /opt/git/docker/docker_bash.sh /root/docker_bash.sh
+# ln -s  /opt/git/docker/docker_log.sh /root/docker_log.sh
+# chmod a+x /opt/git/docker/*.sh
+echo "alias r='redis-cli'" >> ~/.bashrc
+echo "alias p='psql -h localhost -U postgres'" >> ~/.bashrc
+echo "alias c='cqlsh --cqlversion=\"3.4.2\"'" >> ~/.bashrc
+sed -i 's/SELINUX=permissive/SELINUX=disabled/g' /etc/selinux/config
+setenforce 0
+source ~/.bashrc
+docker version
+
+
+yum install telnet redis postgresql dos2unix docker-engine-selinux -y
+dos2unix /vagrant/shell/*
+#redis-cli 
+#psql -h localhost -U postgres
+
+echo '10.175.1.235 concar-docker-rg01' >> /etc/hosts
+src_images=/vagrant/files/images
+mkdir -p $src_images
+download_url=http://6.18.5.159/docker_images/
+wget --spider  "$download_url" > /dev/null 2>&1
+if [ $? -eq 0 ]; then
+  wget  --max-redirect 10 -r -nH -nd -np -R index.html* -nc  --progress=bar:force -P  ${src_images} "$download_url" 
+fi
+
+#for i in $images_files;do curl --progress -nc -q -O ${src_images}/$i http://6.18.5.159/images/$i  ; done
+#for i in `ls /vagrant/files/images`; do docker load < $src_images/$i; if [ $? -ne 0 ]; then rm -f $src_images/$i; fi; done
+sh /vagrant/shell/docker_load_images.sh
+docker run --restart=always --name cmdt-redis -p 6379:6379 -d concar-docker-rg01:5000/sufei/redis:3.2.6
+docker run --restart=always --name cmdt-postgres -p 9999:9999 -p 5432:5432 -d concar-docker-rg01:5000/sufei/postgres:9.3
+docker run --restart=always --name cmdt-activemq -p 61616:61616 -p  1883:1883 -p 5672:5672 -p 8161:8161 -p 61613:61613 -p 61614:61614 -e ACTIVEMQ_ADMIN_LOGIN=admin -e ACTIVEMQ_ADMIN_PASSWORD=123  -d concar-docker-rg01:5000/sufei/activemq
+
+#docker run --restart=always --name cmdt-cassandra -p 7000:7000 -p 7001:7001 -p 7199:7199 -p 9042:9042 -p 9160:9160 -e MAX_HEAP_SIZE=1G -e HEAP_NEWSIZE=400M -d concar-docker-rg01:5000/sufei/cassandra 
+docker network create --driver=bridge --subnet=172.28.0.0/16 --ip-range=172.28.5.0/24 --gateway=172.28.5.1 sufei_br0
+docker run --restart=always --name cmdt-cassandra --net sufei_br0 --ip 172.28.5.2 -p 7000:7000 -p 7001:7001 -p 7199:7199 -p 9042:9042 -p 9160:9160 -e MAX_HEAP_SIZE=1G -e HEAP_NEWSIZE=400M -d concar-docker-rg01:5000/sufei/cassandra
+
+sh /vagrant/shell/docker_save_images.sh 
+yum install python-setuptools -y
+easy_install -i http://mirrors.aliyun.com/pypi/simple/ pip
+easy_install -i http://mirrors.aliyun.com/pypi/simple/ cqlsh
+
+
+# alias easy_install='easy_install -i http://mirrors.aliyun.com/pypi/simple/'
+# easy_install pip
+# mkdir -p /root/.pip/
+# echo '[global]' > /root/.pip/pip.conf
+# echo 'index-url = http://mirrors.aliyun.com/pypi/simple/' >> /root/.pip/pip.conf
+# echo ' ' >> /root/.pip/pip.conf
+# echo '[install]' >> /root/.pip/pip.conf
+# echo 'trusted-host=mirrors.aliyun.com' >> /root/.pip/pip.conf
+echo "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@88OOCCCCoooccccC8COO8@@@@@@@@@@@@@@@@@@@ " > /etc/motd
+echo "@@@@@@@@@@@@@@@@@@@@@@@@@@@888:::::::::::::::::::::::::c8cccccccccco8@@@@@@@@@@@@ " >> /etc/motd
+echo "@@@@@@@@@@@@@@@@@@@8Cccccccc@c:::::::::::::::::::::::::CCcccccccccccccco@@@@@@@@@ " >> /etc/motd
+echo "@@@@@@@@@@@@@8CccccccccccccCC:::coOOOc::::::::O@@@@@@@@@@@@@@@OCcccccccccc8@@@@@@ " >> /etc/motd
+echo "@@@@@@@@@OccccccccccccccoO@@@@@@@@@@@@:::::::O@@@@@@@@@@@@@@@@@@@@@Ccccccccc@@@@@ " >> /etc/motd
+echo "@@@@@@occccccccccccO@@@@@@@@@@@@@@@@@c::::::c@@@@@@@@@@@@@@@@@@@@@@@@CcccccccO@@@ " >> /etc/motd
+echo "@@@CcccccccccccO@@@@@@@@@@@@@@@@@@@@8:::::::8@@@@@@@@@@@@@@@@@@@@@@@@@Cccccccc8@@ " >> /etc/motd
+echo "@Cccccccccccc@@@@@@@@@@@@@@@@@@@@@@@:::::::c@@@@@@@@@@@@@@@@@@@@@@@@@@Occcccccc@@ " >> /etc/motd
+echo "Ccccccccccco@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@O:::::::8@@@@@@@@@@@@@@@@ccccccccc@@ " >> /etc/motd
+echo "cccccccccccc@@@@@@@@@@@@@@@@@@@@@@@:::::::o@@:::::::o@@@@@@@@@@@@@@Occccccccccc@@ " >> /etc/motd
+echo "CcccccccccccccC88@@@@@@@O:::::::@@o:::::::@@C:::::::@@@@OCCCocccccccccccccccccO@@ " >> /etc/motd
+echo "@CccccccccccccccccccC@@@:::::::o@8:::::::O@@:::::::O@@@CcccccccccccccccccccccC@@@ " >> /etc/motd
+echo "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ " >> /etc/motd
+echo "@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@ " >> /etc/motd
+echo "@@@@@@@@@@cO@@@@@@@@@@@8ccco@@CccccO@@@@@@@@cCOCCCcCCCC@@@@@@@@@@@8c@@@@@@@@@@@@@ " >> /etc/motd
+echo "@@@@@ccCCCcoCoCcC@@@@@@@8oo@ccoO@co@@@@@@@oc8OOooccooo8@@@@@@@cO@@8c@@@Oc@@@@@@@@ " >> /etc/motd
+echo "@@@@@cO@@@cC@@@cC@@@@@@@@cc@@8occ8@@@@@@@@@8c8cOCo8c8oo@@@@@@@ccccccccccc@@@@@@@@ " >> /etc/motd
+echo "@@@@@cC@@@cC@@@cC@@@@@@@ccOoO@oo88Oc8@@@@@coc8ooooooooc8@@@@@@c8@@@c@@@8c@@@@@@@@ " >> /etc/motd
+echo "@@@@@@@@@@cC@@@@@@@@@@@o@oC@8@@ococ@@@@@@@@@c@cCo@c@@cO@@@@@@@8CCCocCCCC@o@@@@@@@ " >> /etc/motd
+echo "@@@@@@@@@@cC@@@@@@@@@@@@@oC@Cocc8@@@@@@@@@@8coO@coCoc@C8@@@@@@@@@@@ccooocc@@@@@@@ " >> /etc/motd
+echo " "
+echo "#################################################################################" >> /etc/motd
+echo "#                                                                               #" >> /etc/motd
+echo "#               Welcome to CMDT devops VM                                       #" >> /etc/motd
+echo "#               IPAdress: 192.168.33.100                                        #" >> /etc/motd
+echo "#               Shortcut Command                                                #" >> /etc/motd
+echo "#               Redis Login    : r                                              #" >> /etc/motd
+echo "#               Postgres  Login: p                                              #" >> /etc/motd
+echo "#               Cassandra Login: c                                              #" >> /etc/motd
+echo "#                                                                               #" >> /etc/motd
+echo "#################################################################################" >> /etc/motd
+echo "                                                        Author:Fei.Su@cm-dt.com " >> /etc/motd
+echo "                                                                     ver 170924 " >> /etc/motd
+
+
+nohup /bin/bash /vagrant/shell/callback.sh &
+SCRIPT
+
+Vagrant.configure("2") do |config|
+  hosts.each do |name, ip|
+    config.vm.define name do |machine|
+      machine.vm.box = "cmdt/centos-7.3"
+      machine.vm.box_check_update = false
+      machine.ssh.insert_key = false
+      machine.vm.hostname = name
+      config.hostmanager.enabled = true
+      config.hostmanager.manage_host = true
+      config.hostmanager.manage_guest = true
+      config.hostmanager.ignore_private_ip = false
+      config.hostmanager.include_offline = true
+      machine.vm.network :private_network, ip: ip
+      machine.vm.network "forwarded_port", guest: 6379, host: 6379
+      machine.vm.network "forwarded_port", guest: 5432, host: 5432
+      machine.vm.network "forwarded_port", guest: 9999, host: 9999
+      machine.vm.network "forwarded_port", guest: 1883, host: 1883
+      machine.vm.network "forwarded_port", guest: 5672, host: 5672
+      machine.vm.network "forwarded_port", guest: 8161, host: 8161
+      machine.vm.network "forwarded_port", guest: 61613, host: 61613
+      machine.vm.network "forwarded_port", guest: 61614, host: 61614
+      machine.vm.network "forwarded_port", guest: 61616, host: 61616
+      machine.vm.network "forwarded_port", guest: 7000, host: 7000
+      machine.vm.network "forwarded_port", guest: 7001, host: 7001
+      machine.vm.network "forwarded_port", guest: 7199, host: 7199
+      machine.vm.network "forwarded_port", guest: 9042, host: 9042
+      machine.vm.network "forwarded_port", guest: 9160, host: 9160
+      machine.vm.synced_folder ".", "/vagrant"
+      machine.vm.provision "shell", inline: $script
+      machine.vm.provider "virtualbox" do |v|
+          v.name = name
+          v.cpus = 2
+          v.customize ["modifyvm", :id, "--memory", 3072]
+     end
+    end
+  end
+end
